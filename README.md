@@ -53,6 +53,7 @@ During local development:
 │   │   ├── app.ts
 │   │   ├── config.ts
 │   │   ├── ollama.ts
+│   │   ├── openapi.ts
 │   │   ├── server.ts
 │   │   ├── timeout.ts
 │   │   └── validation.ts
@@ -62,12 +63,22 @@ During local development:
 │       ├── index.html
 │       ├── main.tsx
 │       └── styles.css
+├── tests/                  # testing framework (this fork's addition)
+│   ├── unit/                 # Vitest — pure logic, no I/O
+│   ├── api/                   # Vitest + Supertest — backend contract, generate() mocked
+│   ├── e2e/                    # Playwright — real browser, real Ollama
+│   └── eval/                    # Playwright — non-deterministic LLM quality checks
+├── docs/
+│   └── FINDINGS.md         # defects found, with reproduction steps (this fork's addition)
 ├── .env.example
 ├── .npmrc
 ├── package.json
+├── playwright.config.ts    # this fork's addition
 ├── tsconfig.json
 ├── tsconfig.build.json
-└── vite.config.ts
+├── TESTING.md              # this fork's addition — full testing strategy
+├── vite.config.ts
+└── vitest.config.ts        # this fork's addition
 ```
 
 ## Backend
@@ -373,6 +384,92 @@ not peak model quality.
 
 These behaviors are part of the app reality and are relevant for API, UI, and
 non-deterministic testing scenarios.
+
+## Testing Solution
+
+This fork adds a testing framework on top of the base app described above.
+Full details (layer-by-layer rationale, tradeoffs, and what each test file
+does) are in [`TESTING.md`](TESTING.md). Confirmed defects and open product
+questions found while testing are in [`docs/FINDINGS.md`](docs/FINDINGS.md),
+written with plain-language reproduction steps for a non-technical reviewer.
+
+### What was implemented, and why
+
+Four layers, each targeting a different kind of risk in an LLM chatbot app:
+
+| Layer | Covers | Tooling | Needs Ollama running? |
+| ---- | ---- | ---- | ---- |
+| Unit (`tests/unit/`) | Pure, isolated logic — input validation, timeout wrapper, frontend error-message mapping | Vitest | No |
+| API / contract (`tests/api/`) | Backend HTTP behavior and error mapping (`400`/`429`/`502`/`503`/`504`) | Vitest + Supertest | No — `generate` is mocked in-process |
+| E2E / UI (`tests/e2e/`) | Chat flow through a real browser: composer UX, conversation history, error display, edge-case races | Playwright | Yes |
+| Non-deterministic (`tests/eval/`) | LLM response quality: relevance, format adherence, consistency, hallucination risk | Playwright | Yes |
+
+Unit and API/contract tests never touch Ollama — they run in-process or with
+a mocked model call, so they're fast and fully deterministic. E2E and
+non-deterministic tests run against the real dev servers and the real local
+model, because that's the only way to test what a real user (or a real
+model response) actually does.
+
+### How non-deterministic behavior was handled
+
+The core problem with testing an LLM's output is that there is no exact
+"correct" answer to assert against — the same prompt returns different
+wording every time by design. `tests/eval/` addresses this with heuristic
+checks instead of exact-match assertions:
+
+- **Relevance**: a factual question with a checkable answer; asserts the
+  expected keyword appears in the reply.
+- **Format adherence**: asks for "one short sentence" and checks the reply
+  stays under a length ceiling, rather than turning into an essay.
+- **Consistency**: sends the same prompt 5 times and checks three angles —
+  reply lengths don't vary wildly from each other, all replies stay on
+  topic (keyword-based), and the model itself is used as a judge of whether
+  all 5 replies convey the same core idea (LLM-as-judge).
+- **Hallucination guardrail**: a factual yes/no question with an objectively
+  wrong answer; asserts the model doesn't confidently affirm it.
+
+These checks are inherently probabilistic — a heuristic can occasionally
+fail even when the app is working correctly, just because the model phrased
+something unusually that one time. This was observed directly during
+development: the LLM-as-judge check failed 1 time in 8 runs (~12.5%) against
+the default model (`qwen2.5:3b-instruct`), which is why that specific test
+has retries configured (`test.describe.configure({ retries: 2 })`) — the
+standard way to handle a probabilistic check without masking a consistently
+wrong result. See `TESTING.md` for the full reasoning and the raw data
+behind each heuristic's threshold.
+
+### Running the tests
+
+```bash
+npm install
+npm run test:unit   # unit layer (tests/unit) — no Ollama needed
+npm run test:api    # API/contract layer (tests/api) — no Ollama needed
+npm run test        # unit + API layers together
+npm run test:e2e    # E2E layer (tests/e2e) — requires Ollama running with the configured model
+npm run test:eval   # non-deterministic layer (tests/eval) — requires Ollama running with the configured model
+```
+
+### Known defects and open questions
+
+Five findings from this testing work are written up with reproduction steps
+in [`docs/FINDINGS.md`](docs/FINDINGS.md): two backend validation edge cases
+(zero-width space, UTF-16 vs. visible character counting), a frontend UX gap
+(the composer discards the user's message on a failed request), a confirmed
+frontend race (rapid repeated submissions can send duplicate requests), and
+an inconsistent/undocumented API error format for oversized or malformed
+request bodies. None were patched as part of this work — each entry
+explains why (either a product decision this testing work shouldn't make
+unilaterally, or a change to the base app outside this framework's scope)
+and links to the automated test that documents it.
+
+### AI-assisted development
+
+This testing framework, its documentation, and this README section were
+built with AI-assisted tooling (Claude Code), as encouraged by the original
+challenge brief — used for designing the test layering, writing test cases,
+and reviewing the test suite itself for gaps using a Rapid Software Testing
+(RST) mindset, which is how findings like the frontend race condition and
+the API's inconsistent error format were found.
 
 ## Challenge instructions
 
