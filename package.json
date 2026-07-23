@@ -15,7 +15,8 @@
     "test:api": "vitest run tests/api",
     "test": "vitest run",
     "test:watch": "vitest",
-    "test:e2e": "playwright test"
+    "test:e2e": "playwright test --project=e2e",
+    "test:eval": "playwright test --project=eval"
   },
   "dependencies": {
     "cors": "^2.8.5",
