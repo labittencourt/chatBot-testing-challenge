@@ -72,6 +72,13 @@ recommendation.
 
 ## E2E layer (`tests/e2e/`)
 
+Uses a small Page Object (`chat-page.ts`) to centralize the chat UI's
+selectors and the common "type + send" action, so individual tests read at
+the level of user intent instead of repeating locators — a selector change
+(e.g. the `message` accessible label) only needs updating in one place, not
+in every test. `chat-page.ts` has no `test(...)` calls, so Playwright never
+picks it up as a spec file on its own.
+
 Covers the chat flow through a real browser, driven by Playwright, against
 the real dev servers and the real local Ollama model:
 
