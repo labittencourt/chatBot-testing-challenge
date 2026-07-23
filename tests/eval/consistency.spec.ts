@@ -1,4 +1,8 @@
 import { test, expect } from "@playwright/test";
+import { sendChat } from "./chat-client";
+
+const PROMPT = "Explain what an LLM is in one sentence.";
+const REPEATS = 5;
 
 // The exact wording is expected to differ on every call — that's the point.
 // This checks two things: invariants that should hold on every individual
@@ -11,18 +15,13 @@ import { test, expect } from "@playwright/test";
 test("gives replies that are consistent with each other across repeated calls, not just individually valid", async ({
   request,
 }) => {
-  const prompt = "Explain what an LLM is in one sentence.";
-  const REPEATS = 5;
   const lengths: number[] = [];
 
   for (let i = 0; i < REPEATS; i++) {
-    const res = await request.post("/api/chat", { data: { message: prompt } });
-    expect(res.ok()).toBeTruthy();
-
-    const body = await res.json();
-    expect(body.reply.trim().length).toBeGreaterThan(0);
-    expect(body.reply.length).toBeLessThan(500);
-    lengths.push(body.reply.length);
+    const reply = await sendChat(request, PROMPT);
+    expect(reply.trim().length).toBeGreaterThan(0);
+    expect(reply.length).toBeLessThan(500);
+    lengths.push(reply.length);
   }
 
   // Generous ratio (not exact equality) to tolerate the model's natural
@@ -40,16 +39,11 @@ test("gives replies that are consistent with each other across repeated calls, n
 test("stays on topic across repeated calls (keyword-based content check)", async ({
   request,
 }) => {
-  const prompt = "Explain what an LLM is in one sentence.";
-  const REPEATS = 5;
   const topicKeywords = /\b(language|model|ai|artificial intelligence|llm)\b/i;
 
   for (let i = 0; i < REPEATS; i++) {
-    const res = await request.post("/api/chat", { data: { message: prompt } });
-    expect(res.ok()).toBeTruthy();
-
-    const body = await res.json();
-    expect(body.reply).toMatch(topicKeywords);
+    const reply = await sendChat(request, PROMPT);
+    expect(reply).toMatch(topicKeywords);
   }
 });
 
@@ -71,15 +65,9 @@ test.describe("LLM-as-judge", () => {
   test("all repeated replies convey the same core idea, as judged by the model itself (LLM-as-judge)", async ({
     request,
   }) => {
-    const prompt = "Explain what an LLM is in one sentence.";
-    const REPEATS = 5;
     const replies: string[] = [];
-
     for (let i = 0; i < REPEATS; i++) {
-      const res = await request.post("/api/chat", { data: { message: prompt } });
-      expect(res.ok()).toBeTruthy();
-      const body = await res.json();
-      replies.push(body.reply);
+      replies.push(await sendChat(request, PROMPT));
     }
 
     const numbered = replies
@@ -90,12 +78,7 @@ test.describe("LLM-as-judge", () => {
       `Do all ${REPEATS} answers convey basically the same core idea, even if worded ` +
       `differently? Answer with only "yes" or "no".`;
 
-    const judgeRes = await request.post("/api/chat", {
-      data: { message: judgePrompt },
-    });
-    expect(judgeRes.ok()).toBeTruthy();
-    const judgeBody = await judgeRes.json();
-
-    expect(judgeBody.reply.toLowerCase()).toMatch(/\byes\b/);
+    const verdict = await sendChat(request, judgePrompt);
+    expect(verdict.toLowerCase()).toMatch(/\byes\b/);
   });
 });

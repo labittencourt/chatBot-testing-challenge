@@ -115,6 +115,12 @@ where the real Ollama model's output is actually evaluated; every other
 layer either mocks `generate` or only cares that *some* reply renders,
 never what it says.
 
+A shared helper, `chat-client.ts`, centralizes the repeated "post a message,
+assert the request succeeded, return the reply text" pattern every eval
+test needs (`sendChat(request, message)`). Like `chat-page.ts` in the E2E
+layer, it has no `test(...)` calls, so Playwright never treats it as a spec
+file on its own.
+
 **This layer is fundamentally different from the other three, and that
 difference has to stay visible, not just implied by folder name:**
 

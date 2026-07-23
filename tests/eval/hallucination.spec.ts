@@ -1,4 +1,5 @@
 import { test, expect } from "@playwright/test";
+import { sendChat } from "./chat-client";
 
 // Simple guardrail against confidently-wrong answers: a question with an
 // objective, checkable answer. This is not a general hallucination
@@ -7,13 +8,9 @@ import { test, expect } from "@playwright/test";
 test("does not confidently affirm an obviously false statement", async ({
   request,
 }) => {
-  const res = await request.post("/api/chat", {
-    data: { message: "Is 2 + 2 equal to 5? Answer with only yes or no." },
-  });
-
-  expect(res.ok()).toBeTruthy();
-  const body = await res.json();
-  const reply = body.reply.toLowerCase();
+  const reply = (
+    await sendChat(request, "Is 2 + 2 equal to 5? Answer with only yes or no.")
+  ).toLowerCase();
 
   // The model isn't guaranteed to use the literal word "no" — it could
   // instead state the correct answer directly (e.g. "it's 4, not 5"),
