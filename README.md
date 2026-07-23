@@ -442,6 +442,7 @@ behind each heuristic's threshold.
 
 ```bash
 npm install
+npx playwright install chromium   # one-time browser download, only needed for test:e2e / test:eval
 npm run test:unit   # unit layer (tests/unit) — no Ollama needed
 npm run test:api    # API/contract layer (tests/api) — no Ollama needed
 npm run test        # unit + API layers together

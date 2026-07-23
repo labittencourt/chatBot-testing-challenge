@@ -186,6 +186,7 @@ observed occurring in practice.
 
 ```bash
 npm install
+npx playwright install chromium   # one-time browser download, only needed for test:e2e / test:eval
 npm run test:unit   # unit layer only (tests/unit)
 npm run test:api    # API/contract layer only (tests/api)
 npm run test        # unit + API layers
