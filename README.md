@@ -70,6 +70,10 @@ During local development:
 │   └── eval/                    # Playwright — non-deterministic LLM quality checks
 ├── docs/
 │   └── FINDINGS.md         # defects found, with reproduction steps (this fork's addition)
+├── docker/
+│   └── ollama.Dockerfile   # Ollama + pre-pulled model, used by scheduled CI (this fork's addition)
+├── .github/
+│   └── workflows/          # scheduled test run + CI image build (this fork's addition)
 ├── .env.example
 ├── .npmrc
 ├── package.json
@@ -450,15 +454,25 @@ npm run test:e2e    # E2E layer (tests/e2e) — requires Ollama running with the
 npm run test:eval   # non-deterministic layer (tests/eval) — requires Ollama running with the configured model
 ```
 
+### Continuous integration
+
+This fork has no PRs, so CI runs on a schedule instead
+(`.github/workflows/scheduled-tests.yml`) — 4 times a day, for a 60-day
+window — against a custom Ollama image with the model pre-pulled at build
+time (`docker/ollama.Dockerfile`), so no model download is needed on every
+run. See `TESTING.md` for the full setup and confirmation that it runs
+successfully end-to-end on GitHub's infrastructure.
+
 ### Known defects and open questions
 
-Five findings from this testing work are written up with reproduction steps
+Six findings from this testing work are written up with reproduction steps
 in [`docs/FINDINGS.md`](docs/FINDINGS.md): two backend validation edge cases
 (zero-width space, UTF-16 vs. visible character counting), a frontend UX gap
 (the composer discards the user's message on a failed request), a confirmed
-frontend race (rapid repeated submissions can send duplicate requests), and
-an inconsistent/undocumented API error format for oversized or malformed
-request bodies. None were patched as part of this work — each entry
+frontend race (rapid repeated submissions can send duplicate requests), an
+inconsistent/undocumented API error format for oversized or malformed
+request bodies, and a real WCAG 2 AA color-contrast violation on the user's
+message bubble. None were patched as part of this work — each entry
 explains why (either a product decision this testing work shouldn't make
 unilaterally, or a change to the base app outside this framework's scope)
 and links to the automated test that documents it.

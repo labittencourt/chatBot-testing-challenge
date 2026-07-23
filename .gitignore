@@ -8,6 +8,7 @@ dist/
 *.log
 .vscode/
 .idea/
+.claude/
 
 # personal study notes, not part of the deliverable
 RST-NOTES.md

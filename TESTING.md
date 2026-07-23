@@ -258,6 +258,34 @@ explicit about the gap:
   keep the total eval suite runtime reasonable, since each repeat is a real
   call to the local model.
 
+## Continuous integration
+
+There are no PRs on this fork (it's a solo submission), so the usual
+push/PR-triggered CI doesn't apply the way it would on a team repo. Instead,
+`.github/workflows/scheduled-tests.yml` runs all 4 layers on a schedule:
+4 times a day (05:00, 06:00, 07:00, 08:00 Brasília time / 08:00–11:00 UTC),
+for a 60-day window enforced by an explicit date check in a `gate` job
+(GitHub Actions cron has no built-in expiry, and the platform's own
+60-days-of-repo-inactivity auto-disable is a different, unrelated
+mechanism). It can also be triggered manually via `workflow_dispatch`.
+
+**Why a container instead of installing Ollama fresh on every run:**
+downloading the ~1.9GB default model 4 times a day for 60 days is real,
+avoidable bandwidth and time. `docker/ollama.Dockerfile` extends the
+official `ollama/ollama` image and pre-pulls `qwen2.5:3b-instruct` at
+*build* time; `.github/workflows/build-ollama-image.yml` builds and
+publishes it to GHCR (`ghcr.io/<owner>/chatbot-ollama:qwen2.5-3b-instruct`)
+whenever the Dockerfile changes, or on demand. The scheduled workflow uses
+that image as a `services:` container, so the model is already present the
+moment the container starts — no pull step needed at test time.
+
+**This was verified end-to-end on GitHub's actual infrastructure, not just
+configured and assumed to work:** both workflows were triggered manually
+(`workflow_dispatch`) once each. The image build succeeded in 5m41s; the
+full scheduled test run then completed in 3m47s, with the `gate` job
+correctly evaluating the expiry date and the `test` job passing unit, API,
+E2E, and eval layers against the real Ollama service container.
+
 ## Running the tests
 
 ```bash
