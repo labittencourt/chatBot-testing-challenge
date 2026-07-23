@@ -135,9 +135,16 @@ difference has to stay visible, not just implied by folder name:**
 
 Four categories, one test file each:
 
-- **`relevance.spec.ts`** — a factual question with a checkable answer;
+- **`relevance.spec.ts`** — factual questions with checkable answers;
   asserts the expected keyword appears in the reply (e.g. "Paris" for "what
-  is the capital of France").
+  is the capital of France"). Covers three different questions (breadth —
+  not just one possibly-memorized trivia fact), plus a separate test that
+  runs the same question 5 times and requires at least 4 passes rather than
+  a single pass/fail: the standard way to evaluate a probabilistic system
+  without over-trusting one lucky run or failing the suite over one unlucky
+  one. Playwright has no `test.each` (unlike Jest/Vitest), so the breadth
+  cases are generated with a plain loop calling `test()` at module load
+  time, which is the idiomatic Playwright pattern for this.
 - **`format.spec.ts`** — asks for "one short sentence" and asserts the
   reply stays under a heuristic length ceiling, rather than turning into an
   essay.
@@ -194,6 +201,29 @@ a correct answer phrased as "it's 4, not 5", even though 8/8 manual runs
 against the default model happened to reply with a literal "No" — the
 looser check protects against that phrasing risk even though it wasn't
 observed occurring in practice.
+
+### Known limits of this eval layer, and what a more mature version would add
+
+This is a starting point, not a production-grade evaluation harness. Being
+explicit about the gap:
+
+- **Prompt breadth is still small.** A handful of prompts per category is
+  enough to demonstrate the technique and catch gross regressions, but a
+  mature harness would cover many more prompts per category, ideally
+  organized as versioned test-data files rather than inline literals.
+- **No quality-drift tracking over time.** Every run here is independent —
+  nothing records today's pass rate to compare against last week's. A
+  production setup would persist eval results (pass rate per category, per
+  model version) somewhere queryable, so a silently-degrading model update
+  or prompt change shows up as a trend, not just a one-off local failure.
+  That's a small infrastructure project on its own (a results store plus a
+  place to view it) and deliberately out of scope here — worth flagging as
+  a recommendation rather than quietly leaving unmentioned.
+- **The majority-vote pattern (`relevance.spec.ts`) is applied to one
+  category, not all four.** It's the right technique for `format` and
+  `hallucination` too, in principle; it wasn't extended everywhere here to
+  keep the total eval suite runtime reasonable, since each repeat is a real
+  call to the local model.
 
 ## Running the tests
 

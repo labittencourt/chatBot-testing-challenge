@@ -1,0 +1,88 @@
+name: Scheduled full test suite
+
+# Runs all 4 test layers (unit, API/contract, E2E, non-deterministic eval)
+# 4 times a day, for a limited window (see the `gate` job) — there are no
+# PRs on this fork, so push/PR triggers don't apply; a schedule is the
+# equivalent "keep it green over time" signal instead.
+#
+# Times are in Brasília time (UTC-3): 05:00, 06:00, 07:00, 08:00 ->
+# 08:00, 09:00, 10:00, 11:00 UTC.
+on:
+  schedule:
+    - cron: "0 8 * * *"
+    - cron: "0 9 * * *"
+    - cron: "0 10 * * *"
+    - cron: "0 11 * * *"
+  workflow_dispatch: {}
+
+jobs:
+  # GitHub Actions cron has no built-in expiry. This gate makes the
+  # "next 60 days" window explicit and self-enforcing, instead of relying on
+  # GitHub's unrelated 60-days-of-repo-inactivity auto-disable behavior.
+  gate:
+    runs-on: ubuntu-latest
+    outputs:
+      expired: ${{ steps.check.outputs.expired }}
+    steps:
+      - id: check
+        run: |
+          EXPIRY_DATE="2026-09-21"
+          TODAY=$(date -u +%Y-%m-%d)
+          if [[ "$TODAY" > "$EXPIRY_DATE" ]]; then
+            echo "expired=true" >> "$GITHUB_OUTPUT"
+            echo "Schedule window ended on $EXPIRY_DATE (today: $TODAY) — skipping run."
+          else
+            echo "expired=false" >> "$GITHUB_OUTPUT"
+          fi
+
+  test:
+    needs: gate
+    if: needs.gate.outputs.expired != 'true'
+    runs-on: ubuntu-latest
+    services:
+      ollama:
+        image: ghcr.io/${{ github.repository_owner }}/chatbot-ollama:qwen2.5-3b-instruct
+        credentials:
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+        ports:
+          - 11434:11434
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Install dependencies
+        run: npm install
+
+      - name: Install Playwright browsers
+        run: npx playwright install --with-deps chromium
+
+      - name: Wait for Ollama service to be ready
+        run: |
+          for i in $(seq 1 30); do
+            echo "attempt $i..."
+            curl -sf http://localhost:11434/api/tags && exit 0
+            sleep 2
+          done
+          echo "Ollama service did not become ready in time" >&2
+          exit 1
+
+      - name: Unit + API tests (deterministic)
+        run: npm run test
+
+      - name: E2E tests
+        run: npm run test:e2e
+
+      - name: Non-deterministic eval tests
+        run: npm run test:eval
+
+      - name: Upload Playwright report on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-report
+          path: test-results/
+          retention-days: 7

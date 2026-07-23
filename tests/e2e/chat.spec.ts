@@ -51,6 +51,29 @@ test("keeps the full conversation history across multiple exchanges", async ({
   await expect(chat.userMessages.nth(1)).toContainText("And what is 3 + 3?");
 });
 
+// Escalates the previous test from 2 to 5 exchanges — the README states the
+// frontend "keeps message history in memory", and a longer history is where
+// an off-by-one in indexing or a rendering issue that only shows up with
+// more DOM nodes would surface, unlike the 2-exchange case above.
+test("keeps a longer conversation history consistent across many exchanges", async ({
+  page,
+}) => {
+  const chat = new ChatPage(page);
+  await chat.goto();
+
+  const EXCHANGES = 5;
+  for (let i = 1; i <= EXCHANGES; i++) {
+    await chat.sendMessage(`Message number ${i}`);
+    await expect(chat.botMessages.nth(i - 1)).toBeVisible({ timeout: 30_000 });
+  }
+
+  await expect(chat.userMessages).toHaveCount(EXCHANGES);
+  await expect(chat.botMessages).toHaveCount(EXCHANGES);
+  for (let i = 1; i <= EXCHANGES; i++) {
+    await expect(chat.userMessages.nth(i - 1)).toContainText(`Message number ${i}`);
+  }
+});
+
 test("shows a validation error when the message exceeds the max length", async ({
   page,
 }) => {

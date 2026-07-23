@@ -1,0 +1,34 @@
+name: Build Ollama CI image
+
+# Builds and publishes the pre-loaded Ollama image used by the scheduled
+# test workflow. Only needs to run when the Dockerfile changes (or manually,
+# on demand) — not on every push, since the image rarely needs rebuilding.
+on:
+  workflow_dispatch: {}
+  push:
+    branches: [main]
+    paths:
+      - "docker/ollama.Dockerfile"
+      - ".github/workflows/build-ollama-image.yml"
+
+jobs:
+  build-and-push:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: docker/ollama.Dockerfile
+          push: true
+          tags: ghcr.io/${{ github.repository_owner }}/chatbot-ollama:qwen2.5-3b-instruct
