@@ -31,6 +31,20 @@ reasons specific to this codebase:
   separate fake Ollama HTTP server as test infrastructure — extra moving
   parts that Supertest's in-process injection avoids entirely.
 
+### Additional API coverage: CORS and concurrency
+
+- **`cors.test.ts`** — pins down that `app.use(cors())` (no options) returns
+  `Access-Control-Allow-Origin: *`, allowing any origin. Fine for a
+  local-only dev tool, but worth having on record as a real risk if this
+  code is ever deployed as-is elsewhere.
+- **`concurrency.test.ts`** — fires several `POST /api/chat` requests at
+  once, with a mock `generate` that finishes in random order, and asserts
+  each response still matches its own request. `app.ts` has no shared
+  mutable state between requests, so this should always pass — the test
+  exists to prove that claim rather than leave it assumed, and to catch a
+  future regression (e.g. an accidental module-level variable) that would
+  make responses cross-talk between concurrent requests.
+
 ## A note on ownership: unit tests are a developer responsibility
 
 Unit tests in this repository (`tests/unit/`) cover pure, isolated functions —
@@ -86,13 +100,19 @@ the real dev servers and the real local Ollama model:
   indicator, and the bot reply appear.
 - composer UX: the Send button stays disabled until there is non-whitespace
   text in the input.
-- conversation history: two exchanges in a row both remain visible, in order.
+- conversation history: two exchanges in a row both remain visible, in
+  order, plus a 5-exchange version to catch anything that only shows up
+  with a longer history (off-by-one indexing, rendering with more DOM
+  nodes) that the 2-exchange case wouldn't.
 - validation error surfaced to the user: a message over `MAX_MESSAGE_LENGTH`
   triggers the backend's 400 and the UI renders it as an alert, and the
   composer recovers (accepts input again) afterward.
 - a previous error is cleared as soon as a new message is submitted, before
   the new reply arrives (not only once the response comes back).
 - pressing Enter with an empty or whitespace-only composer submits nothing.
+- a message containing HTML/script markup renders as literal text, not a
+  real element — React's JSX interpolation escapes it, since `App.tsx` never
+  uses `dangerouslySetInnerHTML`.
 - (`test.fail()`, pending product decision) the composer should restore the
   original message when the request fails — it currently does not, since the
   input is cleared unconditionally before the request settles.
@@ -101,6 +121,19 @@ the real dev servers and the real local Ollama model:
   guard and reach the backend, producing two overlapping requests instead
   of one. See `docs/FINDINGS.md` for the full write-up and reproduction
   steps.
+
+### Accessibility (`accessibility.spec.ts`)
+
+Scans the page with [axe-core](https://github.com/dequelabs/axe-core) (via
+`@axe-core/playwright`), the industry-standard automated accessibility
+checker, both on initial load and after a real message exchange (so the
+dynamically-rendered bubbles are covered too). The initial-load scan passes
+clean. The post-exchange scan is `test.fail()`: it found a real, confirmed
+WCAG 2 AA color-contrast violation on the user's message bubble — see
+`docs/FINDINGS.md` #6 for the exact numbers and why it wasn't patched here.
+Automated scanning like this only catches objective, rule-based violations;
+it cannot confirm a screen reader announces the loading/error live regions
+correctly, only that the markup isn't broken in a way that would prevent it.
 
 `playwright.config.ts` starts `npm run dev` automatically (`webServer`), so
 Ollama must already be running locally with the configured model pulled —

@@ -18,6 +18,29 @@ test("user can send a message and see the bot reply", async ({ page }) => {
   await expect(chat.status).toBeHidden();
 });
 
+// App.tsx renders message text as `<p>{m.text}</p>` — plain JSX
+// interpolation, not `dangerouslySetInnerHTML` — so React should escape any
+// markup in the message rather than parsing it into real DOM elements.
+// This proves that in practice: a message containing an <img> tag with an
+// onerror handler should render as literal visible text, never create a
+// real <img> element, and never execute the handler.
+test("renders a message containing markup as literal text, not executable HTML", async ({
+  page,
+}) => {
+  const chat = new ChatPage(page);
+  await chat.goto();
+
+  const payload = '<img src=x onerror="window.__xssFired = true">';
+  await chat.sendMessage(payload);
+
+  const lastUserMessage = chat.userMessages.last();
+  await expect(lastUserMessage).toContainText(payload);
+  await expect(lastUserMessage.locator("img")).toHaveCount(0);
+
+  const xssFired = await page.evaluate(() => (window as unknown as Record<string, unknown>).__xssFired);
+  expect(xssFired).toBeUndefined();
+});
+
 test("send button is disabled until the composer has non-whitespace text", async ({
   page,
 }) => {

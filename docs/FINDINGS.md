@@ -21,6 +21,7 @@ None of these were patched as part of this testing work — see each entry's
 | 3 | Composer discards the user's message when a request fails | Medium | Frontend UX |
 | 4 | Rapid repeated submissions can send duplicate, overlapping requests | Medium–High | Frontend logic |
 | 5 | Oversized/malformed request bodies return an inconsistent, undocumented error format | Medium | API contract |
+| 6 | User message bubble fails WCAG 2 AA color contrast | Medium | Frontend accessibility |
 
 ---
 
@@ -234,3 +235,52 @@ any future change to this behavior, intentional or not, is caught.
 **Recommendation:** add a custom JSON error-handling middleware so all
 non-2xx responses share the same `{ "error": string }` shape, and document
 `413` as a possible response in the README and OpenAPI spec.
+
+---
+
+## 6. User message bubble fails WCAG 2 AA color contrast
+
+**Severity:** Medium
+**Area:** Frontend — `src/frontend/styles.css`
+
+**Description:** The blue chat bubble used for the user's own messages
+(`.msg-user { background: #2b5cff; }`) does not have enough contrast
+between its background and its text color to meet the WCAG 2 AA minimum
+(4.5:1 for normal text). This makes the user's own messages harder to read
+than intended for anyone with low vision, and fails a widely-used
+accessibility standard outright.
+
+**Steps to reproduce:**
+1. Open the app in a browser (`npm run dev`, visit `http://localhost:5173`).
+2. Send any message (e.g. "Say hello in one short sentence.").
+3. Open browser DevTools, inspect the blue message bubble you just sent
+   (the `<li class="msg msg-user">` element) and its "You" label
+   (`<span class="msg-label">`).
+4. Most browsers' DevTools show a contrast warning directly in the color
+   picker for the `color` property when the ratio is insufficient — or
+   run an automated scan (see below).
+
+**Automated reproduction:** `tests/e2e/accessibility.spec.ts` runs
+[axe-core](https://github.com/dequelabs/axe-core) (the industry-standard
+automated accessibility scanner) against the page after a message exchange.
+It reports two violations on the same `.msg-user` bubble:
+- The "You" label: **2.45:1** contrast ratio (needs 4.5:1).
+- The message text itself: **4.23:1** contrast ratio (needs 4.5:1).
+
+Both are under the WCAG 2 AA threshold. The label is worse because
+`.msg-label` also has `opacity: 0.6` applied in `styles.css`, which further
+lightens its effective color against the background.
+
+**Why this wasn't fixed here:** the fix is a color change to
+`src/frontend/styles.css` (the base app's styling), not a change to the
+testing framework built on top of it — the same scope boundary applied to
+every other confirmed defect in this report. This is documented as an
+automated test expected to fail (`test.fail()` in
+`tests/e2e/accessibility.spec.ts`) rather than silently left unmeasured, so
+the suite still notices if the contrast is fixed (the test would then fail
+in the other direction, since it's marked as expected-to-fail) or if it
+gets worse.
+
+**Recommendation:** darken `.msg-user`'s background or lighten its text
+color (and remove or reduce the `.msg-label` opacity within that bubble) to
+reach at least a 4.5:1 contrast ratio, then remove the `test.fail()` wrapper.
