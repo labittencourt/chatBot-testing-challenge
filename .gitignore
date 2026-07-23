@@ -8,3 +8,9 @@ dist/
 *.log
 .vscode/
 .idea/
+
+# personal study notes, not part of the deliverable
+RST-NOTES.md
+
+# Playwright test artifacts
+test-results/
