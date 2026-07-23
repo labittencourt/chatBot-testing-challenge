@@ -47,6 +47,13 @@ jobs:
           password: ${{ secrets.GITHUB_TOKEN }}
         ports:
           - 11434:11434
+    env:
+      # config.ts's hardcoded fallback is 10s when no .env file sets this
+      # (this workflow never creates one) — too short for CPU-only, no-GPU
+      # inference on a shared runner. A confirmed CI failure showed the
+      # backend giving up before the model replied, well under the 30s the
+      # E2E tests wait for a reply to render.
+      REQUEST_TIMEOUT_MS: "60000"
     steps:
       - uses: actions/checkout@v4
 
