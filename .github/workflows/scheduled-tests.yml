@@ -67,6 +67,18 @@ jobs:
             curl -sf http://localhost:11434/api/tags && exit 0
             sleep 2
           done
+
+      # Ollama loads model weights into memory lazily, on the first generate
+      # call — on a CPU-only, no-GPU runner this can take longer than a
+      # test's UI timeout budget. A throwaway warm-up call here means the
+      # model is already loaded by the time the test suite's own first
+      # request happens, instead of that cold-start cost landing on a
+      # random test and timing it out.
+      - name: Warm up the Ollama model
+        run: |
+          curl -sf http://localhost:11434/api/generate -d '{"model":"qwen2.5:3b-instruct","prompt":"hello","stream":false}' \
+            --max-time 120 > /dev/null
+          echo "Model warmed up."
           echo "Ollama service did not become ready in time" >&2
           exit 1
 
